@@ -1,0 +1,23 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Sparkles } from 'lucide-react';
+import { api } from '@/lib/api/client';
+import { type Organization, type PageResult } from '@/lib/api/organization';
+import { type Course, type CourseSummary } from '@/lib/api/course';
+import AiTutor from '@/components/platform/AiTutor';
+import { Page, Panel, Failure, Pager, Notice, fieldClass } from '@/components/platform/Platform';
+export default function AiAssistant() {
+  const [orgId, setOrgId] = useState(''); const [courseId, setCourseId] = useState(''); const [taskId, setTaskId] = useState('');
+  const [orgPage, setOrgPage] = useState(0); const [coursePage, setCoursePage] = useState(0);
+  const organizations = useQuery({ queryKey: ['organizations', orgPage], queryFn: ({ signal }) => api.request<PageResult<Organization>>(`/organizations?page=${orgPage}`, 'GET', undefined, signal), retry: false });
+  const courses = useQuery({ queryKey: ['organization', orgId, 'courses', coursePage], queryFn: ({ signal }) => api.request<PageResult<CourseSummary>>(`/organizations/${orgId}/courses?page=${coursePage}`, 'GET', undefined, signal), enabled: !!orgId, retry: false });
+  const course = useQuery({ queryKey: ['organization', orgId, 'course', courseId], queryFn: ({ signal }) => api.request<Course>(`/organizations/${orgId}/courses/${courseId}`, 'GET', undefined, signal), enabled: !!orgId && !!courseId, retry: false });
+  const selectedTask = course.data?.topics.flatMap(topic => topic.tasks).find(task => task.id === taskId);
+  return <Page title="AI təlim köməkçisi" description="Tapşırığınızı seçin, çətinlik çəkdiyiniz addımı izah edin və düşünməyə kömək edən ipucu alın."><Panel title="Öyrənmə konteksti"><div className="flex gap-3 items-start text-sm text-muted-foreground"><Sparkles className="shrink-0 text-primary" size={20} /><p>AI seçilmiş tapşırığın öyrənmə məqsədlərinə əsaslanır. Hazır cavab və ya uğur qiyməti əvəzinə istiqamətləndirici sual verir.</p></div>
+    {organizations.isPending && <Notice>Təşkilatlar yüklənir…</Notice>}{organizations.error && <Failure error={organizations.error} retry={() => organizations.refetch()} />}
+    {organizations.data && <><label className="block text-sm space-y-2"><span>Təşkilat</span><select className={fieldClass} value={orgId} onChange={event => { setOrgId(event.target.value); setCourseId(''); setTaskId(''); setCoursePage(0); }}><option value="">Təşkilat seçin</option>{organizations.data.items.filter(org => !org.archived).map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label><Pager page={orgPage} total={organizations.data.total} setPage={page => { setOrgPage(page); setOrgId(''); setCourseId(''); setTaskId(''); }} />{!organizations.data.total && <p className="text-sm text-muted-foreground">Əvvəl <Link to="/organizations" className="text-primary">təşkilat yaradın</Link> və ya dəvətinizi qəbul edin.</p>}</>}
+    {orgId && <>{courses.isPending && <Notice>Kurslar yüklənir…</Notice>}{courses.error && <Failure error={courses.error} retry={() => courses.refetch()} />}{courses.data && <><label className="block text-sm space-y-2"><span>Yayımlanmış kurs</span><select className={fieldClass} value={courseId} onChange={event => { setCourseId(event.target.value); setTaskId(''); }}><option value="">Kurs seçin</option>{courses.data.items.filter(course => course.status === 'PUBLISHED').map(course => <option key={course.id} value={course.id}>{course.title}</option>)}</select></label><Pager page={coursePage} total={courses.data.total} setPage={page => { setCoursePage(page); setCourseId(''); setTaskId(''); }} /><Link className="text-sm text-primary" to={`/organizations/${orgId}/courses`}>Kurs kataloquna keç →</Link></>}</>}
+    {courseId && <>{course.isPending && <Notice>Tapşırıqlar yüklənir…</Notice>}{course.error && <Failure error={course.error} retry={() => course.refetch()} />}{course.data && <label className="block text-sm space-y-2"><span>Tapşırıq</span><select className={fieldClass} value={taskId} onChange={event => setTaskId(event.target.value)}><option value="">Tapşırıq seçin</option>{course.data.topics.map((topic, index) => <optgroup key={index} label={topic.title}>{topic.tasks.filter(task => task.id).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</optgroup>)}</select></label>}</>}
+  </Panel>{selectedTask && <Panel title={selectedTask.title}><p className="whitespace-pre-wrap text-sm leading-relaxed">{selectedTask.instructions}</p><AiTutor key={`${orgId}/${courseId}/${taskId}`} orgId={orgId} courseId={courseId} taskId={taskId} /></Panel>}</Page>;
+}
