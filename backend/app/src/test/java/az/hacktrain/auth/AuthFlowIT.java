@@ -7,7 +7,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -30,25 +29,19 @@ class AuthFlowIT {
         r.add("spring.data.redis.url",()->"redis://"+redis.getHost()+":"+redis.getMappedPort(6379));
         r.add("hacktrain.rate-limit.redis-uri",()->"redis://"+redis.getHost()+":"+redis.getMappedPort(6379));
         r.add("hacktrain.auth.jwt-secret",()->Base64.getEncoder().encodeToString(new byte[32]));
-        r.add("hacktrain.auth.mail-encryption-key",()->Base64.getEncoder().encodeToString(new byte[32]));
-        r.add("hacktrain.auth.frontend-url",()->"http://localhost:5173"); r.add("hacktrain.auth.mail-from",()->"test@hacktrain.invalid");
-        r.add("hacktrain.auth.cors-origins",()->"http://localhost:5173"); r.add("spring.mail.host",()->"localhost");
+        r.add("hacktrain.auth.frontend-url",()->"http://localhost:5173");
+        r.add("hacktrain.auth.cors-origins",()->"http://localhost:5173");
         r.add("management.server.port",()->"0");
     }
-    @Autowired AuthRetention retention; @Autowired AuthService service; @Autowired JdbcTemplate jdbc; @Autowired MailCipher cipher;
+    @Autowired AuthRetention retention; @Autowired AuthService service; @Autowired JdbcTemplate jdbc;
     @Autowired TestRestTemplate http; @Autowired org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
-    @MockitoBean JavaMailSender mailSender;
-    final String password="StrongPassword123!";
-    @BeforeEach void clearRateLimit() { redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>)c->{c.serverCommands().flushDb(); return null;}); }
+    final String password="12345678";
+    @BeforeEach void clearRateLimit() { jdbc.update("update user_account set blocked=false where email=?",StaticAccount.EMAIL); jdbc.update("delete from refresh_session"); redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>)c->{c.serverCommands().flushDb(); return null;}); }
     String newEmail() { return UUID.randomUUID()+"@example.com"; }
-    String actionLinkToken(String email) {
-        var body=jdbc.queryForObject("select encrypted_body from auth_mail_outbox where recipient=? order by created_at desc limit 1",String.class,email);
-        return cipher.decrypt(body).split("#token=")[1];
-    }
-    String verifiedUser() { var email=newEmail(); service.register(new AuthDtos.Register(email,password)); service.verifyEmail(actionLinkToken(email)); return email; }
+    String verifiedUser() { return StaticAccount.EMAIL; }
     AuthDtos.Tokens login(String email) { return service.login(new AuthDtos.Login(email,password)); }
     ResponseEntity<String> me(String token) { var h=new HttpHeaders(); h.setBearerAuth(token); return http.exchange("/api/v1/auth/me",HttpMethod.GET,new HttpEntity<>(h),String.class); }
-    @Test void registrationVerificationLoginAndProfile() {
+    @Test void staticAccountLoginAndProfile() {
         String email=verifiedUser(); var tokens=login(email);
         assertThat(me(tokens.accessToken()).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(me(tokens.accessToken()).getBody()).contains(email).doesNotContain("passwordHash","refreshToken");
@@ -71,25 +64,9 @@ class AuthFlowIT {
             assertThatThrownBy(()->service.refresh(winner.refreshToken())).isInstanceOf(AuthFailure.class);
         }
     }
-    @Test void passwordResetIsSingleUseAndRevokesAccessAndRefresh() {
-        var email=verifiedUser(); var tokens=login(email); service.requestAction(email,"RESET_PASSWORD"); var reset=actionLinkToken(email);
-        service.resetPassword(new AuthDtos.ResetPassword(reset,"ReplacementPassword123!"));
-        assertThat(me(tokens.accessToken()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThatThrownBy(()->service.refresh(tokens.refreshToken())).isInstanceOf(AuthFailure.class);
-        assertThatThrownBy(()->service.resetPassword(new AuthDtos.ResetPassword(reset,"AnotherPassword123!"))).isInstanceOf(AuthFailure.class);
-        assertThat(service.login(new AuthDtos.Login(email,"ReplacementPassword123!")).accessToken()).isNotBlank();
-    }
-    @Test void verificationIsSingleUseAndExpires() {
-        var email=newEmail(); service.register(new AuthDtos.Register(email,password)); var token=actionLinkToken(email); service.verifyEmail(token);
-        assertThatThrownBy(()->service.verifyEmail(token)).isInstanceOf(AuthFailure.class);
-        email=newEmail(); service.register(new AuthDtos.Register(email,password)); var expired=actionLinkToken(email);
-        jdbc.update("update action_token set expires_at=now()-interval '1 second' where user_id=(select id from user_account where email=?)",email);
-        assertThatThrownBy(()->service.verifyEmail(expired)).isInstanceOf(AuthFailure.class);
-    }
-    @Test void clientCannotAssignAdministrativeRole() {
-        var response=http.postForEntity("/api/v1/auth/register",Map.of("email",newEmail(),"password",password,"platformRole","SUPER_ADMIN"),String.class);
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-    }
+
+
+
     @Test void loginRateLimitIsDistributedAndForwardedHeaderCannotBypassIt() {
         var headers=new HttpHeaders(); headers.setContentType(MediaType.APPLICATION_JSON);
         ResponseEntity<String> response=null;
@@ -111,12 +88,7 @@ class AuthFlowIT {
         assertThat(me(tokens.accessToken()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThatThrownBy(()->service.refresh(tokens.refreshToken())).isInstanceOf(AuthFailure.class);
     }
-    @Test void changePasswordRevokesEverySession() {
-        var email=verifiedUser(); var a=login(email); var b=login(email); var id=jdbc.queryForObject("select id from user_account where email=?",UUID.class,email);
-        service.changePassword(id,new AuthDtos.ChangePassword(password,"ChangedPassword123!"));
-        assertThat(me(a.accessToken()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        assertThatThrownBy(()->service.refresh(b.refreshToken())).isInstanceOf(AuthFailure.class);
-    }
+
     @Test void logoutOnlyRevokesItsOwnFamilyAndLogoutAllRevokesAll() {
         var email=verifiedUser(); var a=login(email); var b=login(email); service.logout(a.refreshToken());
         assertThatThrownBy(()->service.refresh(a.refreshToken())).isInstanceOf(AuthFailure.class);
@@ -124,32 +96,22 @@ class AuthFlowIT {
         service.logoutAll(id); assertThatThrownBy(()->service.refresh(next.refreshToken())).isInstanceOf(AuthFailure.class);
         assertThat(me(b.accessToken()).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
-    @Test void sessionCredentialsCannotAccessAnotherProfile() {
-        var emailA=verifiedUser(); var emailB=verifiedUser(); var a=login(emailA); var b=login(emailB);
-        assertThat(me(a.accessToken()).getBody()).contains(emailA).doesNotContain(emailB);
-        assertThat(me(b.accessToken()).getBody()).contains(emailB).doesNotContain(emailA);
-    }
-    @Test void duplicateRegistrationHasSamePublicResponseAndDoesNotChangeCredentials() {
-        var email=verifiedUser();
-        var first=http.postForEntity("/api/v1/auth/register",new AuthDtos.Register(email,"DifferentPassword123!"),String.class);
-        var second=http.postForEntity("/api/v1/auth/register",new AuthDtos.Register(newEmail(),password),String.class);
-        assertThat(first.getStatusCode()).isEqualTo(HttpStatus.ACCEPTED); assertThat(first.getBody()).isEqualTo(second.getBody());
-        assertThat(login(email).accessToken()).isNotBlank();
+    @Test void independentSessionsBelongToStaticAccount() {
+        var a=login(StaticAccount.EMAIL); var b=login(StaticAccount.EMAIL);
+        assertThat(a.refreshToken()).isNotEqualTo(b.refreshToken());
+        assertThat(me(a.accessToken()).getBody()).contains(StaticAccount.EMAIL);
+        assertThat(me(b.accessToken()).getBody()).contains(StaticAccount.EMAIL);
     }
 
+
     @Test void httpCredentialLifecycleUsesDtoValidationAndErrorContract() {
-        String email=newEmail();
-        assertThat(http.postForEntity("/api/v1/auth/register",new AuthDtos.Register(email,password),String.class).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        assertThat(http.postForEntity("/api/v1/auth/resend-verification",new AuthDtos.EmailRequest(email),String.class).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        assertThat(http.postForEntity("/api/v1/auth/verify-email",new AuthDtos.TokenRequest(actionLinkToken(email)),String.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        String email=StaticAccount.EMAIL;
         var tokens=http.postForObject("/api/v1/auth/login",new AuthDtos.Login(email,password),AuthDtos.Tokens.class);
         var next=http.postForObject("/api/v1/auth/refresh",new AuthDtos.TokenRequest(tokens.refreshToken()),AuthDtos.Tokens.class);
         assertThat(next.refreshToken()).isNotEqualTo(tokens.refreshToken());
         assertThat(http.postForEntity("/api/v1/auth/logout",new AuthDtos.TokenRequest(next.refreshToken()),String.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
         var revoked=http.postForEntity("/api/v1/auth/refresh",new AuthDtos.TokenRequest(next.refreshToken()),String.class);
         assertThat(revoked.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED); assertThat(revoked.getHeaders().getContentType().toString()).contains("application/problem+json");
-        assertThat(http.postForEntity("/api/v1/auth/forgot-password",new AuthDtos.EmailRequest(email),String.class).getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
-        assertThat(http.postForEntity("/api/v1/auth/reset-password",new AuthDtos.ResetPassword(actionLinkToken(email),"NewPassword123!"),String.class).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
     @Test void cleanupRetainsReplayDetectionUntilFamilyExpires() {
         var email=verifiedUser(); var token=login(email); service.refresh(token.refreshToken());
@@ -157,12 +119,8 @@ class AuthFlowIT {
         retention.purgeExpiredCredentials();
         assertThat(jdbc.queryForObject("select count(*) from refresh_session where user_id=?",Integer.class,id)).isEqualTo(2);
         jdbc.update("update refresh_session set expires_at=now()-interval '2 days' where user_id=?",id);
-        jdbc.update("update action_token set expires_at=now()-interval '2 days' where user_id=?",id);
-        jdbc.update("update auth_mail_outbox set created_at=now()-interval '8 days' where recipient=?",email);
         retention.purgeExpiredCredentials();
         assertThat(jdbc.queryForObject("select count(*) from refresh_session where user_id=?",Integer.class,id)).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from action_token where user_id=?",Integer.class,id)).isZero();
-        assertThat(jdbc.queryForObject("select count(*) from auth_mail_outbox where recipient=?",Integer.class,email)).isZero();
     }
     @Test void accountLoginLimitSurvivesIpChanges() {
         var email=verifiedUser(); for(int i=0;i<10;i++) login(email);

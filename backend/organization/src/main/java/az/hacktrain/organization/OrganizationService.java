@@ -1,7 +1,6 @@
 package az.hacktrain.organization;
 
 import az.hacktrain.auth.IdentityDirectory;
-import az.hacktrain.auth.MailOutbox;
 import jakarta.persistence.EntityManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.*;
@@ -26,7 +25,6 @@ public class OrganizationService implements OrganizationAccess {
     private final OrganizationMapper mapper;
     private final TenantScope scope;
     private final IdentityDirectory identities;
-    private final MailOutbox mail;
     private final InvitationTokens tokens;
     private final Clock clock;
     private final EntityManager em;
@@ -35,11 +33,11 @@ public class OrganizationService implements OrganizationAccess {
     OrganizationService(OrganizationRepository organizations,MembershipRepository members,GroupRepository groups,
             GroupStudentRepository students,TeacherAssignmentRepository teachers,InvitationRepository invitations,
             OrganizationEventRepository events,OrganizationMapper mapper,TenantScope scope,IdentityDirectory identities,
-            MailOutbox mail,InvitationTokens tokens,Clock clock,EntityManager em,OrganizationQuota quota,
+            InvitationTokens tokens,Clock clock,EntityManager em,OrganizationQuota quota,
             @Value("${hacktrain.auth.frontend-url}") String frontend) {
         this.organizations=organizations; this.members=members; this.groups=groups; this.students=students;
         this.teachers=teachers; this.invitations=invitations; this.events=events; this.mapper=mapper;
-        this.scope=scope; this.identities=identities; this.mail=mail; this.tokens=tokens; this.clock=clock; this.em=em;
+        this.scope=scope; this.identities=identities; this.tokens=tokens; this.clock=clock; this.em=em;
         this.frontend=frontend; this.quota=quota;
     }
     public OrganizationView create(UUID actor,Create dto) {
@@ -145,8 +143,8 @@ public class OrganizationService implements OrganizationAccess {
         invitation.id=UUID.randomUUID(); invitation.organizationId=org; invitation.email=email; invitation.role=dto.role().name();
         invitation.tokenHash=tokens.digest(raw); invitation.createdBy=actor; invitation.createdAt=clock.instant(); invitation.expiresAt=clock.instant().plus(Duration.ofDays(3));
         invitations.saveAndFlush(invitation);
-        mail.enqueue(email,"HackTrain təşkilat dəvəti",c.organization.name+" təşkilatına dəvət:\n"+frontend+"/accept-invitation#token="+raw);
-        event(org,actor,invitation.id,"INVITATION_CREATED"); return mapper.view(invitation);
+        event(org,actor,invitation.id,"INVITATION_CREATED");
+        return new InvitationView(invitation.id, invitation.email, invitation.role, invitation.expiresAt, invitation.consumedAt, invitation.revoked, invitation.createdAt, frontend+"/accept-invitation#token="+raw);
     }
     @Transactional(readOnly=true)
     public PageResult<InvitationView> invitations(UUID org,UUID actor,int page,int size) {

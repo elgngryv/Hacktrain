@@ -9,28 +9,20 @@ import static org.assertj.core.api.Assertions.*;
 
 class AuthCoreTest {
     static AuthProperties props() {
-        return new AuthProperties(Base64.getEncoder().encodeToString(new byte[32]),Base64.getEncoder().encodeToString(new byte[32]),
-            "test","api",Duration.ofMinutes(10),Duration.ofDays(30),"http://localhost:5173","test@hacktrain.invalid",List.of("http://localhost:5173"));
+        return new AuthProperties(Base64.getEncoder().encodeToString(new byte[32]),
+            "test","api",Duration.ofMinutes(10),Duration.ofDays(30),"http://localhost:5173",List.of("http://localhost:5173"));
     }
     @Test void tokensAreRandomAndOnlyDigestIsDeterministic() {
         var secrets=new TokenSecrets(); var first=secrets.generate(); var second=secrets.generate();
         assertThat(first).matches("[A-Za-z0-9_-]{43}").isNotEqualTo(second);
         assertThat(secrets.hash(first)).hasSize(64).isEqualTo(secrets.hash(first)).isNotEqualTo(first);
     }
-    @Test void mailCipherRoundTripAndRandomNonce() {
-        var cipher=new MailCipher(props()); var one=cipher.encrypt("reset#token=secret");
-        assertThat(cipher.decrypt(one)).isEqualTo("reset#token=secret");
-        assertThat(cipher.encrypt("reset#token=secret")).isNotEqualTo(one);
-        assertThat(one).doesNotContain("secret");
-    }
-    @Test void mailCipherRejectsTampering() {
-        var cipher=new MailCipher(props()); byte[] data=Base64.getDecoder().decode(cipher.encrypt("secret")); data[data.length-1]^=1;
-        assertThatThrownBy(()->cipher.decrypt(Base64.getEncoder().encodeToString(data))).isInstanceOf(IllegalStateException.class);
-    }
+
+
     @ParameterizedTest @ValueSource(strings={"", "abc", "c2hvcnQ="})
     void weakSigningKeysAreRejected(String key) {
         var p=props();
-        assertThatThrownBy(()->new AuthProperties(key,p.mailEncryptionKey(),p.issuer(),p.audience(),p.accessTtl(),p.refreshTtl(),p.frontendUrl(),p.mailFrom(),p.corsOrigins())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(()->new AuthProperties(key,p.issuer(),p.audience(),p.accessTtl(),p.refreshTtl(),p.frontendUrl(),p.corsOrigins())).isInstanceOf(IllegalArgumentException.class);
     }
     @Test void mapperDoesNotExposeSecrets() {
         var user=new UserAccount(); user.id=UUID.randomUUID(); user.email="student@example.com"; user.passwordHash="hidden";

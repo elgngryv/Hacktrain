@@ -1,3 +1,5 @@
+> 2026-10-09 yeniləmə: sabit giriş `elgun@gmail.com` / `12345678`. Mail servisi, SMTP, qeydiyyat, təsdiq və şifrə bərpası çıxarılıb; V4 köhnə mail/token cədvəllərini silir. Dəvət linki yaradılma cavabında qaytarılır. Aşağıdakı əvvəlki mərhələ test nəticələri bu dəyişiklik üçün yenidən işlədilməyib.
+
 > Cari yeniləmə: **Groq aktivdir** (`openai/gpt-oss-20b`). Backend-only `.env.groq.local` konfiqurasiyası istifadə olunur. Java adapterindən canlı cavab alınıb və JSON Schema/səviyyə validasiyası keçib. Claude kredit maneəsi aktiv Groq provider-inə aid deyil. Pentest/test suite işlədilməyib.
 
 > Son yeniləmə: Claude adapteri əlavə edildi və aktiv provider seçildi. Açar ayrı, ignore edilən `.env.claude.local` faylındadır. Model endpoint-i HTTP 200 qaytarıb, generasiya isə API kredit balansına görə HTTP 400 ilə bloklanıb. Canlı uğurlu AI cavabı hələ alınmayıb. Kredit əlavə etmək lazımdır. Pentest/test suite icra edilməyib.

@@ -1,126 +1,46 @@
-> Cari dəyişiklik: e-poçt təsdiqi çıxarılıb; course və OpenAI kurs köməkçisi, React inteqrasiyası əlavə edilib. Əvvəlki test göstəriciləri son AI dəyişikliklərinin sübutu deyil. [Cari status](STATUS.md), [işə salma](../README.md).
+# HackTrain backend
 
-# HackTrain Java backend
+Java 21 / Spring Boot modular monolith: auth, organization, course və Groq/Claude/OpenAI inteqrasiyası.
 
-Java 21 / Spring Boot 3.5 modular monolith. Bu təhvil hissəsi platformanın arxitekturasını, auth və organization implementasiyasını əhatə edir. Bütün platforma hələ production-ready deyil. Dəqiq icra, test nəticələri və davam nöqtəsi [STATUS.md](STATUS.md)-dədir. Mövcud React/Supabase frontend bu backend-ə hələ keçirilməyib.
+## Giriş
 
-## Sənədlər
+Sabit hesab: **elgun@gmail.com**, parol **12345678**. Backend startup zamanı hesabı yaradır; mövcuddursa ID və təşkilat əlaqələrini saxlayır, parolu tələb olunan dəyərə uyğunlaşdırır. Bazada BCrypt hash saxlanır. Bu sabit hesab bütün istifadəçilər üçün eyni kimlikdir.
 
-1. [Arxitektura və modul diaqramı](docs/ARCHITECTURE.md)
-2. [ER diaqramı](docs/ER.md)
-3. [Tam API kataloqu — hazır və planlaşdırılmış endpoint-lər](docs/API.md)
-4. [AI JSON Schema və system prompt](contracts/ai/README.md)
-5. [Qiymətləndirmə meyarları və sübut xəritəsi](docs/SCORING.md)
+Qeydiyyat, mail təsdiqi, şifrə bərpası və dəyişdirilməsi endpoint-ləri çıxarılıb. SMTP, mail outbox və Mailpit yoxdur. V4 migrasiyası köhnə poçt növbəsini və verification/reset tokenlərini silir; istifadəçi və kurs məlumatları saxlanır. Təşkilat dəvəti yaradıldıqda `invitationUrl` yalnız həmin cavabda qaytarılır, linki əl ilə paylaşmaq olar.
 
-## Lokal quraşdırma
+## Lokal başlatma
 
-Docker Desktop/Engine və Compose v2+ lazımdır. Terminalda bu qovluğa keçin. Secret-lər `.env`-dən gəlir; repoda real secret yoxdur. İlk dəfə `.env.example` faylını `.env` kimi kopyalayın və aşağıdakı altı dəyişəni yaradın. JWT_SECRET və MAIL_ENCRYPTION_KEY üçün iki ayrı `openssl rand -base64 32`; digər dörd parol üçün ayrı `openssl rand -hex 24` nəticələrindən istifadə edin. Mövcud `.env` faylını yenidən yaratmayın.
+Mövcud `.env` faylını saxlayın; ilk quraşdırmada `.env.example` əsasında yaradın. PostgreSQL/runtime DB, Redis və Grafana üçün parollar, JWT üçün `openssl rand -base64 32` nəticəsi lazımdır.
 
 ```sh
-cp .env.example .env
-# .env daxilində POSTGRES_PASSWORD, RUNTIME_DB_PASSWORD, REDIS_PASSWORD, JWT_SECRET,
-# MAIL_ENCRYPTION_KEY, GRAFANA_PASSWORD üçün ayrı random dəyərlər yazın.
-docker compose up --build -d
+docker compose --env-file .env --env-file .env.groq.local up -d --build
 ```
 
-Bu Compose hazırkı auth/organization tətbiqi və ayrıca migration job, PostgreSQL, Redis, Mailpit, Prometheus və Grafana-nı qaldırır. Lab runner hələ əlavə edilməyib. Bu **lokal dev** topologiyasıdır: DB migration və runtime user ayrıdır; Mailpit test email-i saxlayır, real ünvanlara göndərmir. Production üçün idarə olunan DB credential-ları, TLS ingress, SMTP provider, backup və şəbəkə sərhədləri tələb olunur; dev compose-u internetə açmayın.
+Groq faylı istifadə edilmirsə ikinci `--env-file` hissəsini çıxarın. AI açarı yalnız backend environment-də saxlanır. API: `http://localhost:8081`, frontend origin: `http://localhost:8080`.
 
-- API: `http://localhost:8081` (mövcud Vite frontend 8080 portundadır)
-- Mailpit test inbox: `http://localhost:8025`
-- Grafana: `http://localhost:3000`, user `admin`, parol `.env`-dəki GRAFANA_PASSWORD
-- Prometheus və management 9091 yalnız daxili ops şəbəkəsindədir.
-- Dev OpenAPI JSON: `/v3/api-docs`; interaktiv Swagger UI: `/swagger-ui/index.html`. Authorize düyməsinə access token daxil edin. Production profilində hər ikisi söndürülüb.
+Lokal idarə olunan servislər PostgreSQL, Redis, migrator, app, Prometheus və Grafana-dır. Flyway əvvəl migrator ilə işləyir; app runtime DB rolundan istifadə edir. Mövcud DB volume-nu silməyin.
 
-```sh
-docker compose ps
-docker compose logs --tail=100 app
-docker compose down
+## Environment
+
+- `DB_URL`, `DB_USER`, `DB_PASSWORD`: PostgreSQL JDBC bağlantısı.
+- `REDIS_URL`: Redis URI.
+- `JWT_SECRET`: minimum 32 random bayt, Base64.
+- `FRONTEND_URL`, `CORS_ORIGINS`: frontend origin və konkret icazəli origin-lər.
+- `AI_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL=openai/gpt-oss-20b`.
+- `PORT`: API portu; default 8080. Management portu 9091.
+
+Spring Boot `.env` fayllarını özü oxumur; IntelliJ və ayrıca deploy-da dəyişənləri prosesə ötürün.
+
+## API
+
+`POST /api/v1/auth/login` sorğusu:
+
+```json
+{"email":"elgun@gmail.com","password":"12345678"}
 ```
 
-`down` DB volume-larını saxlayır. Credential və email body-lərini loglara yazmayın.
+Cavabda access və refresh token gəlir. `GET /api/v1/auth/me` üçün `Authorization: Bearer <accessToken>` göndərin. Refresh rotasiyası, logout, logout-all və rate limit saxlanılıb. Frontend tokenləri yalnız yaddaşda saxlayır.
 
-## Java ilə build və test
+[API kataloqu](docs/API.md) · [Arxitektura](docs/ARCHITECTURE.md) · [AI](docs/AI-INTEGRATION.md) · [Status](STATUS.md)
 
-JDK 21, Maven 3.9.11+ və işlək Docker lazımdır. Testcontainers PostgreSQL və Redis-i özü qaldırır; servis qapalıdırsa integration testlər skip edilmədən uğursuz olur.
-
-```sh
-mvn -B -ntp clean verify
-python3 scripts/check-coverage.py
-```
-
-Surefire unit testləri, Failsafe `*IT` inteqrasiya testlərini işlədir. JaCoCo unit və integration coverage-ni `app/target/site/jacoco-aggregate/index.html`-də birləşdirir. Gate API/domain aggregate və ayrıca migrator kodunun birlikdə sətir coverage-ni minimum 80% tələb edir; gələcək yazılmamış modulları ölçmür. `mvn test` təkbaşına integration testi işlətdiyini göstərmir.
-
-Bu sessiyada Java/Maven sistemə global quraşdırılmayıb; müvəqqəti `/tmp/hacktrain-tools` altında istifadə olunub. Gələcəkdə adi JDK/Maven quraşdırılması və ya Docker build istifadə edin.
-
-GitHub Actions build, unit/integration test, 80% coverage gate, test artefaktları və Docker image build işlədir. Registry push/deploy və mock AI eval bu hissədə əlavə edilməyib; deploy ünvanı/registry hesabı seçilməyib.
-
-## Auth API ssenarisi
-
-Bütün body-lər JSON, maksimum 16 KiB, naməlum sahələr rədd edilir. Parol minimum 12 simvol, maksimum UTF-8 ilə 72 baytdır. Login üçün əvvəl e-poçt təsdiqlənməlidir. İstifadəçi qeydiyyatda rol seçə bilməz.
-
-```sh
-curl -i http://localhost:8081/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"student@example.com","password":"ReplaceWithYourStrongPass123!"}'
-```
-
-Mailpit-də verification mesajını açın. Linkin `#token=` hissəsini götürün; həmin frontend route bu mərhələdə hələ yoxdur. Token-i POST ilə göndərin:
-
-```sh
-curl -i http://localhost:8081/api/v1/auth/verify-email \
-  -H 'Content-Type: application/json' \
-  -d '{"token":"EMAIL_LINK_TOKEN"}'
-curl -s http://localhost:8081/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"student@example.com","password":"ReplaceWithYourStrongPass123!"}'
-curl -s http://localhost:8081/api/v1/auth/me \
-  -H 'Authorization: Bearer ACCESS_TOKEN'
-curl -s http://localhost:8081/api/v1/auth/refresh \
-  -H 'Content-Type: application/json' \
-  -d '{"token":"REFRESH_TOKEN"}'
-```
-
-Token placeholder-lərini faktiki cavabla əvəz edin. Refresh çağırışından sonra köhnə token atılır. Eyni köhnə token yenidən təqdim edilərsə həmin ailənin yeni refresh token-i də ləğv edilir. Client refresh sorğularını seriallaşdırmalıdır. Ayrı cihazın ayrıca token ailəsi təsirlənmir. Access token logout/refresh replay-dən sonra maksimum 10 dəqiqə yaşaya bilər; logout-all, password reset/change və hesab bloklanması növbəti sorğuda access token-i də rədd edir.
-
-Şifrə bərpası: `/auth/forgot-password`-a email göndərin, inbox-dakı token ilə `/auth/reset-password`-a `{token,password}` göndərin. Qeydiyyat və recovery cavabları hesabın mövcudluğunu açıqlamır. Baza authority STUDENT-dir; təşkilat üzrə TEACHER/ORG_ADMIN organization modulunda membership ilə verilir.
-
-Access token-i browser yaddaşında saxlayın. Bu JSON bearer API cookie authentication istifadə etmir. Persistent browser refresh saxlamaq üçün ayrıca BFF/HttpOnly cookie + CSRF adapteri hələ lazımdır. Hazırkı frontend-də localStorage ilə production sessiya inteqrasiyası etməyin.
-
-Rate limit: IP başına 20/dəq və 100/saat; login hesab başına 10/dəq və 50/saat; verification/reset/register email göndərişi hesab başına 5/saat. Redis kəsiləndə auth fail-closed olaraq 503 verir. Backend client X-Forwarded-For başlığına etibar etmir; production reverse proxy real IP siyasəti ayrıca konfiqurasiya və test olunmalıdır. NAT arxasındakı böyük təlim qrupları üçün limitlər ölçülüb yenidən tənzimlənməlidir.
-
-## Environment müqaviləsi
-
-| Dəyişən | Məna |
-|---|---|
-| SPRING_PROFILES_ACTIVE | dev, test və ya prod |
-| DB_URL / DB_USER / DB_PASSWORD | Runtime PostgreSQL JDBC və credential |
-| POSTGRES_PASSWORD / RUNTIME_DB_PASSWORD | Compose migration/bootstrap və ayrıca runtime rol parolları |
-| REDIS_URL | Redis URI; prod-da TLS və credential, URI-safe password |
-| JWT_SECRET | Base64, minimum 32 random bayt, yalnız serverdə |
-| MAIL_ENCRYPTION_KEY | Base64, dəqiq 32 random bayt AES-GCM açarı |
-| JWT_ISSUER / JWT_AUDIENCE | Default hacktrain / hacktrain-api |
-| FRONTEND_URL | Verification/reset linkinin etibarlı sabit origin-i |
-| CORS_ORIGINS | Vergüllə ayrılmış konkret origin-lər, wildcard qadağandır |
-| MAIL_FROM | Göndərən email |
-| SMTP_HOST / SMTP_PORT | SMTP server, default port 587 |
-| SMTP_USERNAME / SMTP_PASSWORD | SMTP autentifikasiya |
-| SMTP_AUTH / SMTP_TLS | Prod üçün true; Mailpit-də false |
-
-Mail encryption key rotasiyasında əvvəlki şifrəli outbox payload-larının idarəsi lazımdır: köhnə növbəni göndərin və ya yeni verification/reset tələb edin. Mail uğurla göndəriləndə şifrəli payload silinir. SMTP retry maksimum 10 cəhd, exponential backoff; dead-letter və 7 günlük silmə əməliyyat komandası tərəfindən izlənməlidir. AuthRetention vaxtı bitmiş token-ləri bir günlük buffer, outbox mesajlarını yeddi günlük retention ilə təmizləyir; istifadə edilmiş refresh hash-ləri ailə bitənədək saxlanır.
-
-## Production qəbul şərtləri
-
-Hazır auth testləri tam platformanın qəbulunu əvəz etmir. Daha geniş domain tenant izolyasiyası, lab runner hardening, AI evidence və secret-leak testləri, müəllim approval workflow, billing provider webhook-ları, GDPR workflow, backup restore, secret rotation, dependency/container CVE scan, 500 aktiv istifadəçi yük sınağı və staging e2e keçməlidir. Real provayder eval nəticəsi və pilot olmadan AI keyfiyyəti və istifadəçi faydası iddiası verilmir.
-
-## Compose smoke yoxlaması
-
-Lokal Compose servisləri qalxdıqdan sonra `python3 scripts/smoke-auth.py` ayrıca sintetik hesab yaradır, real SMTP ilə Mailpit-ə verification email-in çatmasını, login, profil, refresh rotation/replay revocation, OpenAPI və Grafana health-i yoxlayır. Credential/token-lər ekrana yazılmır. Bu script lokal dev üçündür, real istifadəçi/pilot məlumatı yaratmır.
-
-
-## Təşkilat və migration axını
-
-[Organization modulunun icazələri və API nümunələri](docs/ORGANIZATION.md) ayrıca verilib. Auth/organization-dan sonra növbəti kod modulu course-dur. Təşkilat yaratmaq, müəllim/tələbə dəvət etmək, qrup yaratmaq və membership ID ilə təyinat etmək artıq işləyən API-lərdir.
-
-Flyway artıq API startup-ında işləmir. Compose `migrate` servisini uğurla tamamlayıb sonra `app`-ı açır. Java ilə ayrı deploy zamanı əvvəl `migration/target/migration-1.0.0-SNAPSHOT.jar`-ı migration roluna aid DB_URL/DB_USER/DB_PASSWORD ilə işlədin; sonra API JAR-ını yalnız runtime credential ilə başladın. Migration parolu API environment-inə verilməməlidir. Production rolunun cədvəl sahibi, superuser və ya BYPASSRLS olması startup-da rədd edilir.
-
-PostgreSQL init script-i yalnız yeni data volume-da rol yaradır. Mövcud DB-yə keçiddə operator runtime rolunu ayrıca yaratmalı və migration rolunun gələcək cədvəlləri üçün default privileges verməlidir; real məlumat volume-nu silmək migration üsulu deyil. Dev Compose-un frontend origin-i mövcud Vite konfiqurasiyasına uyğun `http://localhost:8080`, backend portu `8081`-dir.
+Ayrı deploy üçün `compose.prod.yml` və `.env.production.example` istifadə olunur. Migration və runtime DB rolları ayrı olmalıdır. Tam platformanın lab, RAG, assessment, billing və report hissələri hələ tamamlanmayıb.

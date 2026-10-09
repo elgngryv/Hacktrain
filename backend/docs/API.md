@@ -4,20 +4,16 @@ Baza `/api/v1`. **Hazır:** auth, organization, course və kurs AI köməkçisi 
 
 İcra edilmiş organization list sorğuları `page` (0–10000), `size` (1–100), nəticə `{items,page,size,total}`; vaxt UTC ISO-8601; ID UUID; səhvlər `application/problem+json`. Mutasiyalarda uyğun olduqda `Idempotency-Key`, optimistic revision/If-Match tələb olunur. API version major dəyişiklik üçün artırılır. Rol yalnız tenant scope daxilində verilir; T müəllim yalnız təyin olunduğu qrupa baxır. S tələbə, T müəllim, O təşkilat admini, P platforma admini. A həmin təşkilatın aktiv üzvüdür. Public endpoint-də rol qəbul edilmir.
 
-## Auth — icra edilib
+## Auth — sabit hesab
+
+Giriş: `elgun@gmail.com` / `12345678`. Mail göndərilmir.
 
 | Method | Yol | Giriş və nəticə | İcazə |
 |---|---|---|---|
-| POST | /auth/register | email,password → 202 generic | Public |
 | POST | /auth/login | email,password → accessToken,refreshToken,expiresIn | Public |
 | POST | /auth/refresh | token → rotasiya edilmiş token cütü | Public token |
 | POST | /auth/logout | token → 204, token ailəsi ləğv olunur | Public token |
 | POST | /auth/logout-all | 204, token version artır | Authenticated |
-| POST | /auth/verify-email | token → 204 | Public token |
-| POST | /auth/resend-verification | 202; təsdiq məktubu göndərilmir | Legacy |
-| POST | /auth/forgot-password | email → 202 generic | Public |
-| POST | /auth/reset-password | token,password → 204 | Public token |
-| POST | /auth/change-password | currentPassword,newPassword → 204 | Authenticated |
 | GET | /auth/me | təhlükəsiz profil DTO | Authenticated |
 
 ## Organization — icra edilib
@@ -31,9 +27,9 @@ Baza `/api/v1`. **Hazır:** auth, organization, course və kurs AI köməkçisi 
 | GET | /organizations/{org}/membership | Öz aktiv üzvlüyü və rol | A |
 | GET | /organizations/{org}/members | Üzvlər | O |
 | PATCH/DELETE | /organizations/{org}/members/{member} | Rol/status, çıxar; son admin qorunur | O |
-| POST/GET | /organizations/{org}/invitations | Dəvət yarat/siyahı | O |
+| POST/GET | /organizations/{org}/invitations | Dəvət linki yarat/siyahı | O |
 | DELETE | /organizations/{org}/invitations/{invitation} | Dəvəti ləğv et | O |
-| POST | /invitations/accept | token ilə, təsdiqli email uyğunluğu | Authenticated |
+| POST | /invitations/accept | token ilə, hesab email uyğunluğu | Authenticated |
 | POST/GET | /organizations/{org}/groups | Qrup yarat/siyahı | O / təyinatına görə A |
 | GET/PATCH/DELETE | /organizations/{org}/groups/{group} | Qrup oxu / yenilə / arxivlə | Təyinatına görə A / O / O |
 | POST/DELETE | /organizations/{org}/groups/{group}/students/{member} | Üzvlük | O |

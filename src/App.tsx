@@ -39,9 +39,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/verify-email" element={<Auth />} />
-              <Route path="/reset-password" element={<TokenAction key="reset" action="reset-password" />} />
-              <Route path="/accept-invitation" element={<TokenAction key="invite" action="accept-invitation" />} />
+              <Route path="/accept-invitation" element={<TokenAction />} />
               <Route path="/organizations" element={<RequireAuth><Organizations /></RequireAuth>} />
               <Route path="/organizations/:orgId" element={<RequireAuth><OrganizationDetail /></RequireAuth>} />
               <Route path="/organizations/:orgId/groups/:groupId" element={<RequireAuth><GroupDetail /></RequireAuth>} />

@@ -1,0 +1,11 @@
+.git
+node_modules
+dist
+deployments
+backend
+supabase
+tests
+.env
+.env.*
+**/*.pem
+**/*.key

@@ -5,5 +5,6 @@ interface OrganizationMapper {
     OrganizationDtos.OrganizationView view(Organization entity);
     OrganizationDtos.MemberView view(Membership entity);
     OrganizationDtos.GroupView view(StudyGroup entity);
+    @Mapping(target="invitationUrl",ignore=true)
     OrganizationDtos.InvitationView view(Invitation entity);
 }

@@ -1,3 +1,4 @@
+import { apiBaseUrl } from './base-url';
 export interface Tokens { accessToken: string; refreshToken: string; tokenType: string; expiresIn: number }
 export interface Profile { id: string; email: string; emailVerified: boolean; platformRole: string; createdAt: string }
 export class ApiError extends Error {
@@ -72,7 +73,7 @@ export class ApiClient {
     if (token) await this.send('/auth/logout', 'POST', { token });
   }
 }
-export const api = new ApiClient();
+export const api = new ApiClient(apiBaseUrl(import.meta.env?.VITE_API_BASE_URL));
 export function errorMessage(error: unknown) {
   if (error instanceof ApiError && error.status === 429) return `${error.message} ${error.retryAfter ? `${error.retryAfter} saniyə sonra yenidən cəhd edin.` : 'Bir qədər sonra yenidən cəhd edin.'}`;
   return error instanceof Error ? error.message : 'Gözlənilməz xəta baş verdi.';

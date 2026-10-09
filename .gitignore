@@ -26,3 +26,8 @@ dist-ssr
 
 # Local credentials
 
+
+# Generated independent deployment packages and local deployment settings
+deployments/
+.env.production
+backend/.env.production
