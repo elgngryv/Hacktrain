@@ -7,6 +7,7 @@ import java.net.http.*;
 import java.time.Duration;
 import java.util.*;
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="hacktrain.ai.provider",havingValue="openai",matchIfMissing=true)
 class OpenAiProvider implements AiProvider {
     private final String key,model; private final ObjectMapper mapper;
     private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();

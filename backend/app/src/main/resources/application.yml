@@ -68,6 +68,11 @@ springdoc:
     enabled: false
 hacktrain:
   ai:
+    groq-key: ${GROQ_API_KEY:}
+    groq-model: ${GROQ_MODEL:openai/gpt-oss-20b}
+    provider: ${AI_PROVIDER:openai}
+    anthropic-key: ${ANTHROPIC_API_KEY:}
+    claude-model: ${CLAUDE_MODEL:claude-sonnet-4-6}
     openai-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:}
     student-daily-limit: ${AI_STUDENT_DAILY_LIMIT:30}

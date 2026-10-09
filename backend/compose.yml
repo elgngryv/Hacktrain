@@ -50,6 +50,11 @@ services:
     build: .
     environment:
       SPRING_PROFILES_ACTIVE: dev
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       AI_STUDENT_DAILY_LIMIT: ${AI_STUDENT_DAILY_LIMIT:-30}

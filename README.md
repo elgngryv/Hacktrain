@@ -7,7 +7,7 @@ React/TypeScript frontend + Java 21/Spring Boot modular backend.
 - E-poçt və şifrə ilə qeydiyyat və giriş. **E-poçt təsdiqi və təsdiq kodu tələb olunmur.** Qeydiyyatdan sonra frontend avtomatik daxil olur.
 - Təşkilatlar, öz təşkilat rolunun oxunması, qruplar, üzvlər, müəllim/tələbə təyinatı, dəvətlər.
 - Kurs, mövzu, tapşırıq, çətinlik və öyrənmə məqsədi redaktoru; yayımlama; qruplara kurs təyinatı; tələbə görünüşü.
-- Yayımlanmış tapşırıqda AI təlim köməkçisi. OpenAI Responses API, server tərəfində JSON Schema yoxlaması, səviyyə 1 ipucu, Redis limitləri, timeout, circuit breaker və açıq işarələnmiş sabit fallback.
+- Yayımlanmış tapşırıqda AI təlim köməkçisi. Groq, Claude Messages və OpenAI Responses API adapterləri, server tərəfində JSON Schema yoxlaması, səviyyə 1 ipucu, Redis limitləri, timeout, circuit breaker və açıq işarələnmiş sabit fallback.
 
 AI açarı/modeli verilməyibsə, sistem real AI cavabı hazırladığını iddia etmir. Laboratoriya runner-i, cəhd sübutları, RAG, assessment, billing və hesabat modulları tamamlanmayıb. Köhnə Arena/CTF/icma səhifələri əvvəlki prototipə aiddir və yeni backend nəticələrinin sübutu sayılmır. Köhnə uzaq API-yə bağlı admin route-ları aktiv routing-dən çıxarılıb.
 
@@ -22,20 +22,19 @@ Hazırkı lokal `backend/.env` mövcud stack-i `COMPOSE_PROJECT_NAME` vasitəsil
 
 Vite `/api` sorğularını `127.0.0.1:8081`-ə yönləndirir. Production-da static frontend və `/api` üçün eyni origin üzərindən reverse proxy qurulmalıdır. `vite preview` API reverse proxy-ni təmin etmir. Mailpit yalnız şifrə bərpası və təşkilat dəvətlərinin lokal poçtunu tutur; qeydiyyat üçün poçt lazım deyil.
 
-## AI-ni aktivləşdirmə
+## Groq AI inteqrasiyası
 
-Yalnız `backend/.env` faylında:
+Aktiv provider `groq`, model `openai/gpt-oss-20b`-dir. Açar yalnız Git-dən kənar `backend/.env.groq.local` faylındadır (0600).
 
-```dotenv
-OPENAI_API_KEY=your-server-side-key
-OPENAI_MODEL=your-structured-output-compatible-model
-AI_STUDENT_DAILY_LIMIT=30
-AI_ORGANIZATION_DAILY_LIMIT=1000
+```sh
+docker compose --env-file backend/.env --env-file backend/.env.groq.local -f backend/compose.yml up -d --build app
 ```
 
-Sonra backend Compose əmrini təkrar icra edin. Model identifikatorunu OpenAI hesabınızda mövcud olan modelə uyğun daxil edin. Secret-ləri `VITE_` dəyişənlərinə, React koduna və ya brauzer yaddaşına yazmayın. API açarını çatda göndərmək lazım deyil.
+Frontend: `http://localhost:8080/ai`. Təşkilat → yayımlanmış kurs → tapşırıq seçin və izahınızı göndərin. Köməkçi kurs tapşırıqlarının daxilində də mövcuddur.
 
-İstifadə: təşkilat yaradın → Kursları aç → qaralama yaradın → mövzu, tapşırıq və məqsəd əlavə edib yadda saxlayın → yayımlayın → tapşırıqda izah yazıb “İpucu al” seçin. Tələbənin kursu görməsi üçün tələbəni qrupa, yayımlanmış kursu isə həmin qrupa təyin edin.
+Yeni Java adapteri ilə real Groq cavabı alınıb və backend JSON Schema/səviyyə yoxlamasından keçib. Pentest və test suite işlədilməyib.
+
+Konfiqurasiya: `AI_PROVIDER=groq`, `GROQ_API_KEY`, `GROQ_MODEL=openai/gpt-oss-20b`. Açar frontend-ə və `VITE_` dəyişənlərinə yazılmır. Claude və OpenAI adapterləri alternativ kimi qalır, avtomatik provider keçidi yoxdur. Xidmət xətasında sabit fallback açıq işarələnir.
 
 ## Sessiyalar
 

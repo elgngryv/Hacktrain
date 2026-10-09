@@ -30,6 +30,10 @@ public class AiService {
                 catch(Exception invalid) { LOG.warn("ai_invalid_output requestId={} attempt={}",id,attempt+1); }
             }
         } catch(InterruptedException e) { Thread.currentThread().interrupt(); }
+        catch(ProviderUnavailable unavailable) {
+            LOG.warn("ai_unavailable requestId={} provider={} reason={}",id,provider.name(),unavailable.reason);
+            if(unavailable.reason==ProviderUnavailable.Reason.CREDIT_BALANCE) return fallback(id,"Claude API balansı kifayət deyil. Administrator Anthropic hesabına kredit əlavə etməlidir. Hazırda sabit təlim sualı göstərilir.");
+        }
         catch(Exception unavailable) { LOG.warn("ai_unavailable requestId={} provider={}",id,provider.name()); }
         finally { concurrency.release(); }
         return fallback(id,"AI cavabı alınmadı. Sabit təlim sualı göstərilir.");

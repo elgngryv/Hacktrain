@@ -2,3 +2,5 @@
 .env
 .git
 *.pem
+
+.env.*

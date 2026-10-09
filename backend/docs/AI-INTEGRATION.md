@@ -1,3 +1,7 @@
+> Cari aktiv provider **Groq**, model **openai/gpt-oss-20b**. Açar yalnız `.env.groq.local` faylında saxlanır. Yeni Java adapterindən real cavab alınıb, tam backend schema və səviyyə yoxlaması keçib (607 input / 528 output token). Aşağıdakı Claude balans qeydi əvvəlki provider-in tarixi vəziyyətidir.
+
+> Claude yeniləməsi: `AI_PROVIDER=claude`, `CLAUDE_MODEL=claude-sonnet-4-6`, `ANTHROPIC_API_KEY` əlavə edilib. Claude açarı `backend/.env.claude.local` faylındadır; Compose əmrinə ikinci `--env-file` kimi verilir. Model endpoint-i açarı qəbul edib; Messages çağırışı kredit çatışmazlığına görə HTTP 400 qaytarıb. Kredit əlavə etmək istifadəçinin növbəti addımıdır. Pentest/test suite işlədilməyib.
+
 # AI inteqrasiyası — mövcud implementasiya
 
 ## Axın
@@ -19,7 +23,7 @@ sequenceDiagram
   API-->>UI: AI cavabı və ya fallback=true sabit sual
 ```
 
-`ai` ayrıca Maven moduludur. Provider portu `AiProvider`, hazır adapter `OpenAiProvider`-dir. Hazırda yalnız OpenAI implementasiya olunub; Claude/Gemini adapterləri gələcək işdir. Model environment-dən seçilir, brauzerdən seçilmir.
+`ai` ayrıca Maven moduludur. Provider portu `AiProvider`, hazır adapterlər `OpenAiProvider` və `ClaudeProvider`-dir. Claude və OpenAI config-dən seçilir; Gemini və avtomatik provider fallback gələcək işdir. Model environment-dən seçilir, brauzerdən seçilmir.
 
 ## Hazır endpoint-lər
 
@@ -50,6 +54,20 @@ Prompt və schema `ai/src/main/resources/ai/` içində ayrıca versiyalı faylla
 
 `OPENAI_API_KEY`, `OPENAI_MODEL`, `AI_STUDENT_DAILY_LIMIT`, `AI_ORGANIZATION_DAILY_LIMIT` yalnız backend-də saxlanır. İlk ikisi boş olanda `configured=false` və `fallback=true` qaytarılır; bu AI cavabı kimi təqdim olunmur.
 
-Cari environment-də API açarı yoxdur. Real model çağırışı və keyfiyyət qiymətləndirilməsi icra edilməyib. İstifadəçi pentest/yoxlamanı dayandırdıqdan sonra yalnız compile/build aparılıb.
+Cari environment-də Claude açarı var; authentication qəbul edilib, generasiya kredit çatışmazlığına görə rədd edilib. Uğurlu AI cavabı və keyfiyyət qiymətləndirilməsi hələ təsdiqlənməyib. İstifadəçi pentest/yoxlamanı dayandırdıqdan sonra yalnız compile/build aparılıb.
 
 API müqaviləsi üçün rəsmi mənbə: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+
+## Claude adapteri
+
+Sabit endpoint `https://api.anthropic.com/v1/messages`, `x-api-key` və `anthropic-version: 2023-06-01`; system prompt ayrı, `output_config.format` JSON Schema. Claude-un dəstəkləmədiyi uzunluq/say hədləri wire schema-dan təsvirə keçirilir, tam orijinal schema backend-də dəyişmədən validasiya edilir. Cavab yalnız `stop_reason=end_turn` olduqda qəbul edilir. 25 saniyə ümumi çağırış həddi, redirect yoxdur. Balans/auth/rate-limit səbəbləri yalnız təhlükəsiz kateqoriya kimi loglanır; raw error body və açar yazılmır.
+
+Mənbə: [Claude Structured Outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs).
+
+## Groq adapteri
+
+`GroqProvider` sabit `https://api.groq.com/openai/v1/chat/completions` endpoint-inə Bearer auth ilə qoşulur. `response_format.json_schema.strict=true`, 2000 completion token həddi və 25 saniyə ümumi çağırış timeout-u istifadə olunur. `finish_reason=stop` və backend schema validasiyası olmadan cavab təqdim edilmir. Raw cavab/key loglanmır. Provider environment-dən seçilir.
+
+İşə salma: `docker compose --env-file backend/.env --env-file backend/.env.groq.local -f backend/compose.yml up -d --build app`.
+
+Rəsmi müqavilə: [Groq Structured Outputs](https://console.groq.com/docs/structured-outputs).
